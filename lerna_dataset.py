@@ -4,12 +4,13 @@ import torch
 from tqdm import tqdm
 import os
 from torch_geometric.data import Data, Dataset
+from torch_geometric.utils import to_undirected
 
 def load_graph(path):
     with open(path, 'rb') as f:
         record = json.load(f)
-        x = torch.tensor(record['nodes'], dtype=torch.float)
-        edge_index = torch.tensor(record['edges'], dtype=torch.long).t()
+        x = torch.tensor(record['nodes'], dtype=torch.long)
+        edge_index = to_undirected(torch.tensor(record['edges'], dtype=torch.long).t(), num_nodes=len(x))
         y = torch.tensor([int(record['y'])])
         return Data(x=x, edge_index=edge_index, y=y)
 
