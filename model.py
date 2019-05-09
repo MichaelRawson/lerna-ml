@@ -1,14 +1,9 @@
 import torch
 from torch.nn import Embedding, Linear, Module, ModuleList
-from torch.nn.functional import dropout, embedding, log_softmax, relu
-from torch_geometric.nn import GCNConv, global_max_pool
+from torch.nn.functional import dropout, log_softmax, relu
+from torch_geometric.nn import GCNConv, TopKPooling, global_max_pool
 
 FLAVOURS = 17
-CONV_CHANNELS = 32
-CONV_LAYERS = 5
-DENSE_CHANNELS = 32
-DENSE_LAYERS = 3
-POOL = 0.9
 DROPOUT = 0.1
 
 class Conv(Module):
@@ -19,10 +14,18 @@ class Conv(Module):
     def forward(self, x, edge_index, batch):
         x = dropout(x, p=DROPOUT, training=self.training)
         x = self.conv(x, edge_index)
-        x = relu(x)
         return x, edge_index, batch
 
-class RectifiedLinear(Module):
+class Pool(Module):
+    def __init__(self, channels, ratio):
+        super().__init__()
+        self.pool = TopKPooling(channels, ratio)
+
+    def forward(self, x, edge_index, batch):
+        x, edge_index, _, batch, _ = self.pool(x, edge_index, batch=batch)
+        return x, edge_index, batch
+
+class FC(Module):
     def __init__(self, channels_in, channels_out):
         super().__init__()
         self.linear = Linear(channels_in, channels_out)
@@ -30,29 +33,36 @@ class RectifiedLinear(Module):
     def forward(self, x):
         x = dropout(x, p=DROPOUT, training=self.training)
         x = self.linear(x)
-        x = relu(x)
         return x
 
 class Model(Module):
     def __init__(self):
         super().__init__()
-        self.embed = Embedding(FLAVOURS, CONV_CHANNELS)
-        self.conv = ModuleList([Conv(CONV_CHANNELS) for _ in range(CONV_LAYERS)])
-        self.dense0 = RectifiedLinear(CONV_CHANNELS, DENSE_CHANNELS)
-        self.dense = ModuleList([RectifiedLinear(DENSE_CHANNELS, DENSE_CHANNELS) for _ in range(DENSE_LAYERS)])
-        self.final = Linear(DENSE_CHANNELS, 2)
+        self.embed = Embedding(FLAVOURS, 64)
+        self.initial_conv = ModuleList([Conv(64) for _ in range(2)])
+        self.conv = ModuleList([Conv(64) for _ in range(5)])
+        self.pool = ModuleList([Pool(64, 0.8) for _ in range(5)])
+        self.fc0 = FC(64, 64)
+        self.fc1 = FC(64, 32)
+        self.fc2 = FC(32, 2)
 
     def forward(self, x, edge_index, batch):
         x = self.embed(x)
-        for conv in self.conv:
+        for conv in self.initial_conv:
             x, edge_index, batch = conv(x, edge_index, batch)
+            x = relu(x)
+
+        for conv, pool in zip(self.conv, self.pool):
+            x, edge_index, batch = conv(x, edge_index, batch)
+            x = relu(x)
+            x, edge_index, batch = pool(x, edge_index, batch)
 
         x = global_max_pool(x, batch)
-        x = self.dense0(x)
-
-        for dense in self.dense:
-            x = dense(x)
-
-        x = self.final(x)
+        x = self.fc0(x)
+        x = relu(x)
+        x = self.fc1(x)
+        x = relu(x)
+        x = self.fc2(x)
         x = log_softmax(x, dim=1)
+
         return x

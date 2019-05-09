@@ -30,8 +30,9 @@ def read_input(line):
 
 def write_score(f, identifier, score):
     record = {"id": identifier, "score": score}
-    string = json.dumps(record)
-    f.write(f"{record}\n".encode('ascii'))
+    serialized = json.dumps(record)
+    f.write(serialized.encode('ascii'))
+    f.write(b'\n')
     f.flush()
 
 def heuristic_task(model):
@@ -51,20 +52,25 @@ def heuristic_task(model):
 
 class Handler(StreamRequestHandler):
     def handle(self):
-        while True:
-            try:
-                while True:
-                    identifier, score = OUT_QUEUE.get_nowait()
-                    write_score(self.wfile, identifier, score)
-            except Empty:
-                pass
+        try:
+            while True:
+                self.write_available_scores()
+                self.read_available_inputs()
+        except (ConnectionResetError, json.JSONDecodeError):
+            pass
 
-            line = self.rfile.readline()
-            try:
-                identifier, data = read_input(line)
-                IN_QUEUE.put((identifier, data))
-            except json.JSONDecodeError:
-                return
+    def read_available_inputs(self):
+        line = self.rfile.readline()
+        identifier, data = read_input(line)
+        IN_QUEUE.put((identifier, data))
+
+    def write_available_scores(self):
+        try:
+            while True:
+                identifier, score = OUT_QUEUE.get_nowait()
+                write_score(self.wfile, identifier, score)
+        except Empty:
+            pass
 
 class Server(TCPServer):
     allow_reuse_address = True
