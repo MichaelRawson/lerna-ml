@@ -35,7 +35,18 @@ class Lerna(Dataset):
 
     def process(self):
         for name in tqdm(self.raw_file_names):
-            data = load_graph(os.path.join(self.raw_dir, name))
+            root = os.path.splitext(name)[0]
+            raw_name = os.path.join(self.raw_dir, name)
+            processed_name = os.path.join(self.processed_dir, root + '.pt')
+            if os.path.exists(processed_name):
+                continue
+
+            data = None
+            try:
+                data = load_graph(raw_name)
+            except:
+                print(f"{raw_name} invalid:")
+                raise
 
             if self.pre_filter is not None and not self.pre_filter(data):
                  continue
@@ -43,10 +54,12 @@ class Lerna(Dataset):
             if self.pre_transform is not None:
                  data = self.pre_transform(data)
 
-            root = os.path.splitext(name)[0]
-            processed_name = os.path.join(self.processed_dir, root + '.pt')
             torch.save(data, processed_name)
 
     def get(self, idx):
-        name = self.processed_file_names[idx]
-        return torch.load(os.path.join(self.processed_dir, name))
+        processed_name = os.path.join(self.processed_dir, self.processed_file_names[idx])
+        try:
+            return torch.load(processed_name)
+        except:
+            print(f"{processed_name} invalid:")
+            raise

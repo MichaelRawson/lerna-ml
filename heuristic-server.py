@@ -11,7 +11,7 @@ from torch.nn.functional import softmax
 from torch_geometric.data import Data, Batch
 from torch_geometric.utils import to_undirected
 
-BATCH = 64
+BATCH = 32
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 RUNNING = True
 IN_QUEUE = Queue(maxsize=2 * BATCH)
@@ -31,9 +31,12 @@ def read_input(line):
 def write_score(f, identifier, score):
     record = {"id": identifier, "score": score}
     serialized = json.dumps(record)
-    f.write(serialized.encode('ascii'))
-    f.write(b'\n')
-    f.flush()
+    try:
+        f.write(serialized.encode('ascii'))
+        f.write(b'\n')
+        f.flush()
+    except BrokenPipeError:
+        pass
 
 def heuristic_task(model):
     model.eval()
@@ -79,15 +82,16 @@ if __name__ == '__main__':
     import sys
     log.basicConfig(level=log.INFO)
 
-    log.info("loading model")
-    model = torch.load(sys.argv[1]).to(DEVICE)
-    Thread(target=heuristic_task, args=(model,), daemon=True).start()
-    log.info("model loaded")
+    with torch.no_grad():
+        log.info("loading model")
+        model = torch.load(sys.argv[1]).to(DEVICE)
+        Thread(target=heuristic_task, args=(model,), daemon=True).start()
+        log.info("model loaded")
 
-    with Server((HOST, PORT), Handler) as server:
-        log.info("server started")
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            server.shutdown()
-            log.info("server shutdown")
+        with Server((HOST, PORT), Handler) as server:
+            log.info("server started")
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                server.shutdown()
+                log.info("server shutdown")

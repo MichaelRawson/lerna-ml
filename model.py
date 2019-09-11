@@ -39,9 +39,9 @@ class Model(Module):
     def __init__(self):
         super().__init__()
         self.embed = Embedding(FLAVOURS, 64)
-        self.initial_conv = ModuleList([Conv(64) for _ in range(2)])
-        self.conv = ModuleList([Conv(64) for _ in range(5)])
-        self.pool = ModuleList([Pool(64, 0.8) for _ in range(5)])
+        self.initial_conv = ModuleList([Conv(64) for _ in range(4)])
+        self.conv = ModuleList([Conv(64) for _ in range(3)])
+        self.pool = ModuleList([Pool(64, 0.6) for _ in range(3)])
         self.fc0 = FC(64, 64)
         self.fc1 = FC(64, 32)
         self.fc2 = FC(32, 2)

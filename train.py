@@ -9,7 +9,7 @@ from torch_geometric.data import DataLoader
 from tqdm import tqdm
 
 ROOT = Path('/media/michael/data/')
-TRAIN = Lerna(ROOT / 'lerna-test')#Lerna(ROOT / 'lerna-train')
+TRAIN = Lerna(ROOT / 'lerna-train')
 TEST = Lerna(ROOT / 'lerna-test')
 
 BATCH_SIZE = 64
